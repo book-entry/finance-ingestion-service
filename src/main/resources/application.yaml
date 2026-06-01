@@ -1,0 +1,50 @@
+server:
+  port: 8083
+  servlet:
+    context-path: /ingestion
+
+spring:
+  application:
+    name: finance-bulk-upload-service
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/bulk_db}
+    username: ${SPRING_DATASOURCE_USERNAME:root}
+    password: ${SPRING_DATASOURCE_PASSWORD:root}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    open-in-view: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQL8Dialect
+        format_sql: false
+        jdbc:
+          time_zone: UTC
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: ${BULK_MAX_FILE_SIZE:50MB}
+      max-request-size: ${BULK_MAX_REQUEST_SIZE:50MB}
+
+app:
+  account-service:
+    base-url: ${ACCOUNT_SERVICE_URL:http://localhost:8081/account}
+    connect-timeout-ms: ${ACCOUNT_SERVICE_CONNECT_TIMEOUT_MS:2000}
+    read-timeout-ms: ${ACCOUNT_SERVICE_READ_TIMEOUT_MS:5000}
+  transaction-service:
+    base-url: ${TRANSACTION_SERVICE_URL:http://localhost:8082/transaction}
+    connect-timeout-ms: ${TRANSACTION_SERVICE_CONNECT_TIMEOUT_MS:2000}
+    read-timeout-ms: ${TRANSACTION_SERVICE_READ_TIMEOUT_MS:10000}
+  bulk-upload:
+    batch-size: ${BULK_BATCH_SIZE:500}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
