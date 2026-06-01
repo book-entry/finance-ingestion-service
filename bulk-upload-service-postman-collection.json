@@ -1,0 +1,192 @@
+{
+  "info": {
+    "name": "finance-bulk-upload-service",
+    "description": "Bulk Upload Service (port 8083) - spec §3.4. Scenario names mirror the unit test method names in BulkUploadControllerTest / BulkUploadServiceImplTest / JobProcessorTest / CsvParserTest for cross-reference.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8083", "type": "string" },
+    { "key": "userId",  "value": "user-123",              "type": "string" },
+    { "key": "jobId",   "value": "00000000-0000-0000-0000-000000000040", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "Bulk Upload",
+      "item": [
+        {
+          "name": "Upload CSV - Happy Path (202)",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "X-User-Id", "value": "{{userId}}" } ],
+            "url": { "raw": "{{baseUrl}}/v1/bulk-upload", "host": ["{{baseUrl}}"], "path": ["v1", "bulk-upload"] },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "transactions.csv",
+                  "description": "Select a CSV with header: accountId,entryType,amount,currency,transactionDate,reference,description,categoryName"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 202', function () { pm.response.to.have.status(202); });",
+                  "var body = pm.response.json();",
+                  "pm.expect(body.success).to.eql(true);",
+                  "pm.expect(body.data.jobId).to.be.a('string');",
+                  "pm.collectionVariables.set('jobId', body.data.jobId);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Upload CSV - Missing file (400)",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "X-User-Id", "value": "{{userId}}" } ],
+            "url": { "raw": "{{baseUrl}}/v1/bulk-upload", "host": ["{{baseUrl}}"], "path": ["v1", "bulk-upload"] },
+            "body": { "mode": "formdata", "formdata": [] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 400', function () { pm.response.to.have.status(400); });",
+                  "pm.expect(pm.response.json().success).to.eql(false);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Upload CSV - Missing X-User-Id (400)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/v1/bulk-upload", "host": ["{{baseUrl}}"], "path": ["v1", "bulk-upload"] },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "file", "type": "file", "src": "transactions.csv" }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 400', function () { pm.response.to.have.status(400); });",
+                  "pm.expect(pm.response.json().error.code).to.eql('VAL_001');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Upload CSV - Not a CSV file (400)",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "X-User-Id", "value": "{{userId}}" } ],
+            "url": { "raw": "{{baseUrl}}/v1/bulk-upload", "host": ["{{baseUrl}}"], "path": ["v1", "bulk-upload"] },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "file", "type": "file", "src": "report.pdf", "description": "Select any non-CSV file" }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 400', function () { pm.response.to.have.status(400); });",
+                  "pm.expect(pm.response.json().error.code).to.eql('INVALID_CSV');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Job Status - Happy Path (200)",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "X-User-Id", "value": "{{userId}}" } ],
+            "url": { "raw": "{{baseUrl}}/v1/bulk-upload/{{jobId}}", "host": ["{{baseUrl}}"], "path": ["v1", "bulk-upload", "{{jobId}}"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', function () { pm.response.to.have.status(200); });",
+                  "var body = pm.response.json();",
+                  "pm.expect(body.success).to.eql(true);",
+                  "pm.expect(['PENDING', 'PROCESSING', 'COMPLETED', 'FAILED']).to.include(body.data.status);",
+                  "pm.expect(body.data.jobId).to.eql(pm.collectionVariables.get('jobId'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Job Status - Non-Existent (404)",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "X-User-Id", "value": "{{userId}}" } ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/bulk-upload/00000000-0000-0000-0000-deadbeef0000",
+              "host": ["{{baseUrl}}"], "path": ["v1", "bulk-upload", "00000000-0000-0000-0000-deadbeef0000"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 404', function () { pm.response.to.have.status(404); });",
+                  "pm.expect(pm.response.json().error.code).to.eql('JOB_NOT_FOUND');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Job Status - Missing X-User-Id (400)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/v1/bulk-upload/{{jobId}}", "host": ["{{baseUrl}}"], "path": ["v1", "bulk-upload", "{{jobId}}"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 400', function () { pm.response.to.have.status(400); });",
+                  "pm.expect(pm.response.json().error.code).to.eql('VAL_001');"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
