@@ -11,6 +11,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
@@ -57,9 +59,21 @@ public class BulkUploadServiceImpl implements BulkUploadService {
             throw new InvalidCsvException("Failed to read CSV stream: " + ex.getMessage(), ex);
         }
 
-        // Hand off to async pipeline. The proxy bound to JobProcessor switches
-        // to a Spring task-executor thread; this method returns immediately.
-        jobProcessor.process(saved.getJobId(), userId, parsed.getRows(), parsed.getErrors());
+        // Hand off to async pipeline AFTER the enclosing TX commits — otherwise
+        // task-1 can win the race and read findById before this INSERT is
+        // visible (NoSuchElementException on JobProcessor:55). When called
+        // without a transactional context (unit tests), fall back to direct.
+        final UUID kickoffJobId = saved.getJobId();
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    jobProcessor.process(kickoffJobId, userId, parsed.getRows(), parsed.getErrors());
+                }
+            });
+        } else {
+            jobProcessor.process(kickoffJobId, userId, parsed.getRows(), parsed.getErrors());
+        }
         return UploadAcceptedResponse.builder().jobId(saved.getJobId()).build();
     }
 
