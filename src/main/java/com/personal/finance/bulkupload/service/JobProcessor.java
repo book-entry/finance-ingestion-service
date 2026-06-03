@@ -145,8 +145,7 @@ public class JobProcessor {
                         .transactionDate(c.getTransactionDate())
                         .reference(c.getReference())
                         .description(c.getDescription())
-                        // categoryName resolution intentionally not supported in batch
-                        // path — spec §3.2 batch endpoint takes pre-resolved categoryId.
+                        .categoryName(c.getCategoryName())
                         .build())
                 .toList();
         return BatchRequestPayload.builder().bulkJobId(jobId).rows(rows).build();

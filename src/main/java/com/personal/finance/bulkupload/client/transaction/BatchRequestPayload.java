@@ -36,5 +36,6 @@ public class BatchRequestPayload {
         private String reference;
         private String description;
         private UUID categoryId;
+        private String categoryName;
     }
 }
