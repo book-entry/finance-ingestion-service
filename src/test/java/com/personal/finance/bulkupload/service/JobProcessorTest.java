@@ -177,6 +177,36 @@ class JobProcessorTest {
     }
 
     @Test
+    void process_forwardsCategoryNameFromCsvRowIntoBatchPayload() {
+        UUID jobId = UUID.randomUUID();
+        BulkUploadJob job = jobOf(jobId);
+        when(jobRepository.findById(jobId)).thenReturn(Optional.of(job));
+        when(jobRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        UUID account = UUID.randomUUID();
+        when(accountValidationClient.validate(eq(USER_ID), any()))
+                .thenReturn(AccountValidationResponse.builder()
+                        .valid(List.of(account)).invalid(List.of()).build());
+        when(transactionBatchClient.sendBatch(eq(USER_ID), any()))
+                .thenReturn(BatchInsertResult.builder().insertedCount(2).failedRows(List.of()).build());
+
+        CsvTransactionRow named = CsvTransactionRow.builder()
+                .rowIndex(1).accountId(account).entryType("DEBIT")
+                .amount(new BigDecimal("1.00")).currency("USD")
+                .transactionDate(LocalDate.of(2026, 5, 24))
+                .categoryName("Food").build();
+        CsvTransactionRow blank = row(2, account); // categoryName left null
+        processor.process(jobId, USER_ID, List.of(named, blank), List.of());
+
+        ArgumentCaptor<BatchRequestPayload> captor = ArgumentCaptor.forClass(BatchRequestPayload.class);
+        verify(transactionBatchClient, atLeastOnce()).sendBatch(eq(USER_ID), captor.capture());
+        BatchRequestPayload sent = captor.getValue();
+        assertThat(sent.getRows()).hasSize(2);
+        assertThat(sent.getRows().get(0).getCategoryName()).isEqualTo("Food");
+        assertThat(sent.getRows().get(1).getCategoryName()).isNull();
+    }
+
+    @Test
     void process_givenParseErrorsAndSomeSuccesses_thenStatusCompletedNotFailed() {
         UUID jobId = UUID.randomUUID();
         BulkUploadJob job = jobOf(jobId);
